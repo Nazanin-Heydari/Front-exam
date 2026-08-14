@@ -1,0 +1,810 @@
+types/product.ts:
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  price: number;
+}
+
+services/product-api.ts:
+import axios from 'axios';
+
+import {
+  CreateProductPayload,
+  Product,
+} from '@/types/product';
+
+export async function fetchProducts(): Promise<Product[]> {
+  const response = await axios.get<Product[]>('/products');
+
+  return response.data;
+}
+
+export async function createProduct(
+  payload: CreateProductPayload
+): Promise<Product> {
+  const response = await axios.post<Product>(
+    '/products',
+    payload
+  );
+
+  return response.data;
+}
+
+export async function deleteProduct(
+  id: number
+): Promise<void> {
+  await axios.delete(`/products/${id}`);
+}
+
+hooks/useProducts.ts:
+import { useQuery } from '@tanstack/react-query';
+
+import { fetchProducts } from '@/services/product-api';
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+  });
+}
+
+hooks/useAddProduct.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { createProduct } from '@/services/product-api';
+
+export function useAddProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createProduct,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['products'],
+      });
+    },
+  });
+}
+
+hooks/useDeleteProduct.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { deleteProduct } from '@/services/product-api';
+
+export function useDeleteProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProduct,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['products'],
+      });
+    },
+  });
+}
+
+components/ProductCard.tsx:
+import { Product } from '@/types/product';
+
+interface ProductCardProps {
+  product: Product;
+  onDelete: (id: number) => void;
+  isDeleting: boolean;
+}
+
+export function ProductCard({
+  product,
+  onDelete,
+  isDeleting,
+}: ProductCardProps) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-gray-200 p-4">
+      <div>
+        <h3 className="text-lg font-semibold">
+          {product.name}
+        </h3>
+
+        <p className="text-sm text-gray-500">
+          ${product.price}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onDelete(product.id)}
+        disabled={isDeleting}
+        className="rounded-lg bg-red-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isDeleting ? 'Deleting...' : 'Delete'}
+      </button>
+    </div>
+  );
+}
+
+components/AddProductForm.tsx:
+import { FormEvent, useState } from 'react';
+
+import { CreateProductPayload } from '@/types/product';
+
+interface AddProductFormProps {
+  onSubmit: (data: CreateProductPayload) => void;
+  isSubmitting: boolean;
+  error?: Error | null;
+}
+
+export function AddProductForm({
+  onSubmit,
+  isSubmitting,
+  error,
+}: AddProductFormProps) {
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+
+  const handleSubmit = (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    const trimmedName = name.trim();
+    const numericPrice = Number(price);
+
+    if (!trimmedName || numericPrice <= 0) {
+      return;
+    }
+
+    onSubmit({
+      name: trimmedName,
+      price: numericPrice,
+    });
+
+    setName('');
+    setPrice('');
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-xl border border-gray-200 p-5"
+    >
+      <h2 className="text-lg font-semibold">
+        Add Product
+      </h2>
+
+      <input
+        type="text"
+        value={name}
+        onChange={(event) =>
+          setName(event.target.value)
+        }
+        placeholder="Product name"
+        className="w-full rounded-lg border border-gray-300 px-4 py-2"
+      />
+
+      <input
+        type="number"
+        value={price}
+        onChange={(event) =>
+          setPrice(event.target.value)
+        }
+        placeholder="Product price"
+        className="w-full rounded-lg border border-gray-300 px-4 py-2"
+      />
+
+      {error && (
+        <p className="text-sm text-red-600">
+          {error.message}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={
+          isSubmitting ||
+          !name.trim() ||
+          Number(price) <= 0
+        }
+        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isSubmitting ? 'Adding...' : 'Add Product'}
+      </button>
+    </form>
+  );
+}
+
+pages/ProductsPage.tsx:
+import { useMemo, useState } from 'react';
+
+import { AddProductForm } from '@/components/AddProductForm';
+import { ProductCard } from '@/components/ProductCard';
+
+import { useAddProduct } from '@/hooks/useAddProduct';
+import { useDeleteProduct } from '@/hooks/useDeleteProduct';
+import { useProducts } from '@/hooks/useProducts';
+
+export default function ProductsPage() {
+  const [search, setSearch] = useState('');
+
+  const {
+    data: products = [],
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useProducts();
+
+  const addMutation = useAddProduct();
+  const deleteMutation = useDeleteProduct();
+
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = search
+      .trim()
+      .toLowerCase();
+
+    return products.filter((product) =>
+      product.name
+        .toLowerCase()
+        .includes(normalizedSearch)
+    );
+  }, [products, search]);
+
+  const handleDelete = (id: number) => {
+    deleteMutation.mutate(id);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        Loading products...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 text-red-600">
+        Failed to load products:
+        {' '}
+        {error.message}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">
+          Product Management
+        </h1>
+
+        {isFetching && (
+          <span className="text-sm text-gray-500">
+            Refreshing...
+          </span>
+        )}
+      </div>
+
+      <AddProductForm
+        onSubmit={addMutation.mutate}
+        isSubmitting={addMutation.isPending}
+        error={addMutation.error}
+      />
+
+      <input
+        type="text"
+        value={search}
+        onChange={(event) =>
+          setSearch(event.target.value)
+        }
+        placeholder="Search by product name..."
+        className="w-full rounded-xl border border-gray-300 px-4 py-3"
+      />
+
+      {products.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-gray-500">
+          No products available.
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-gray-500">
+          No products found.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredProducts.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onDelete={handleDelete}
+              isDeleting={
+                deleteMutation.isPending &&
+                deleteMutation.variables === product.id
+              }
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+----------------------------------------------------------
+EDIT PROJECT
+
+types/product.ts:
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+}
+
+export interface UpdateProductPayload {
+  id: number;
+  name: string;
+  price: number;
+}
+
+services/product-api.ts:
+import API from '@/utils/interceptors/interceptor-clientReq';
+
+import {
+  Product,
+  UpdateProductPayload,
+} from '@/types/product';
+
+export async function fetchProducts(): Promise<Product[]> {
+  const response = await API.get<Product[]>('/products');
+
+  return response.data;
+}
+
+export async function updateProduct({
+  id,
+  name,
+  price,
+}: UpdateProductPayload): Promise<Product> {
+  const response = await API.patch<Product>(
+    `/products/${id}`,
+    {
+      name,
+      price,
+    }
+  );
+
+  return response.data;
+}
+
+hooks/useProducts.ts:
+import { useQuery } from '@tanstack/react-query';
+
+import { fetchProducts } from '@/services/product-api';
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+  });
+}
+
+hooks/useUpdateProduct.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { updateProduct } from '@/services/product-api';
+
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateProduct,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['products'],
+      });
+    },
+  });
+}
+
+components/EditProductForm.tsx:
+import { FormEvent, useState } from 'react';
+
+import { Product } from '@/types/product';
+
+interface EditProductFormProps {
+  product: Product;
+  onSubmit: (data: {
+    id: number;
+    name: string;
+    price: number;
+  }) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+  error?: Error | null;
+}
+
+export function EditProductForm({
+  product,
+  onSubmit,
+  onCancel,
+  isSubmitting,
+  error,
+}: EditProductFormProps) {
+  const [name, setName] = useState(product.name);
+  const [price, setPrice] = useState(
+    String(product.price)
+  );
+
+  const handleSubmit = (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    const trimmedName = name.trim();
+    const numericPrice = Number(price);
+
+    if (!trimmedName || numericPrice <= 0) {
+      return;
+    }
+
+    onSubmit({
+      id: product.id,
+      name: trimmedName,
+      price: numericPrice,
+    });
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-xl border border-blue-200 bg-blue-50 p-5"
+    >
+      <h2 className="text-lg font-semibold">
+        Edit Product
+      </h2>
+
+      <input
+        type="text"
+        value={name}
+        onChange={(event) =>
+          setName(event.target.value)
+        }
+        className="w-full rounded-lg border border-gray-300 px-4 py-2"
+        placeholder="Product name"
+      />
+
+      <input
+        type="number"
+        value={price}
+        onChange={(event) =>
+          setPrice(event.target.value)
+        }
+        className="w-full rounded-lg border border-gray-300 px-4 py-2"
+        placeholder="Product price"
+      />
+
+      {error && (
+        <p className="text-sm text-red-600">
+          {error.message}
+        </p>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        >
+          {isSubmitting ? 'Saving...' : 'Save'}
+        </button>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="rounded-lg border border-gray-300 px-4 py-2"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+components/ProductCard.tsx:
+import { Product } from '@/types/product';
+
+interface ProductCardProps {
+  product: Product;
+  onEdit: (product: Product) => void;
+}
+
+export function ProductCard({
+  product,
+  onEdit,
+}: ProductCardProps) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-gray-200 p-4">
+      <div>
+        <h3 className="text-lg font-semibold">
+          {product.name}
+        </h3>
+
+        <p className="text-sm text-gray-500">
+          ${product.price}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onEdit(product)}
+        className="rounded-lg border border-gray-300 px-4 py-2"
+      >
+        Edit
+      </button>
+    </div>
+  );
+}
+
+pages/ProductsPage.tsx:
+import { useMemo, useState } from 'react';
+
+import { EditProductForm } from '@/components/EditProductForm';
+import { ProductCard } from '@/components/ProductCard';
+
+import { useProducts } from '@/hooks/useProducts';
+import { useUpdateProduct } from '@/hooks/useUpdateProduct';
+
+import { Product } from '@/types/product';
+
+export default function ProductsPage() {
+  const [search, setSearch] = useState('');
+
+  const [editingProduct, setEditingProduct] =
+    useState<Product | null>(null);
+
+  const {
+    data: products = [],
+    isLoading,
+    isError,
+    error,
+  } = useProducts();
+
+  const updateMutation = useUpdateProduct();
+
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = search
+      .trim()
+      .toLowerCase();
+
+    return products.filter((product) =>
+      product.name
+        .toLowerCase()
+        .includes(normalizedSearch)
+    );
+  }, [products, search]);
+
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+  };
+
+  const handleUpdate = (
+    data: Product
+  ) => {
+    updateMutation.mutate(data, {
+      onSuccess: () => {
+        setEditingProduct(null);
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        Loading products...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 text-red-600">
+        Failed to load products:
+        {' '}
+        {error.message}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+      <h1 className="text-2xl font-bold">
+        Product Management
+      </h1>
+
+      {editingProduct && (
+        <EditProductForm
+          product={editingProduct}
+          onSubmit={handleUpdate}
+          onCancel={() =>
+            setEditingProduct(null)
+          }
+          isSubmitting={updateMutation.isPending}
+          error={updateMutation.error}
+        />
+      )}
+
+      <input
+        type="text"
+        value={search}
+        onChange={(event) =>
+          setSearch(event.target.value)
+        }
+        placeholder="Search by product name..."
+        className="w-full rounded-xl border border-gray-300 px-4 py-3"
+      />
+
+      {filteredProducts.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-gray-500">
+          No products found.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredProducts.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onEdit={handleEdit}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+utils/interceptors/axios.ts:
+import axios, {
+  AxiosError,
+  InternalAxiosRequestConfig,
+} from 'axios';
+
+const API = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+const refreshClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+});
+
+let isRefreshing = false;
+
+let failedQueue: {
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}[] = [];
+
+const processQueue = (
+  error: unknown,
+  token: string | null = null
+) => {
+  failedQueue.forEach((promise) => {
+    if (error) {
+      promise.reject(error);
+    } else {
+      promise.resolve(token!);
+    }
+  });
+
+  failedQueue = [];
+};
+
+API.interceptors.request.use(
+  (config) => {
+    const accessToken =
+      localStorage.getItem('accessToken');
+
+    if (accessToken) {
+      config.headers.Authorization =
+        `Bearer ${accessToken}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+API.interceptors.response.use(
+  (response) => response,
+
+  async (error: AxiosError) => {
+    const originalRequest =
+      error.config as InternalAxiosRequestConfig & {
+        _retry?: boolean;
+      };
+
+    if (
+      error.response?.status !== 401 ||
+      originalRequest._retry
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        failedQueue.push({
+          resolve: (token) => {
+            originalRequest.headers.Authorization =
+              `Bearer ${token}`;
+
+            resolve(API(originalRequest));
+          },
+          reject,
+        });
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      const refreshToken =
+        localStorage.getItem('refreshToken');
+
+      if (!refreshToken) {
+        throw new Error('No refresh token');
+      }
+
+      const response = await refreshClient.post(
+        '/auth/refresh',
+        {
+          refreshToken,
+        }
+      );
+
+      const newAccessToken =
+        response.data.accessToken;
+
+      localStorage.setItem(
+        'accessToken',
+        newAccessToken
+      );
+
+      processQueue(null, newAccessToken);
+
+      originalRequest.headers.Authorization =
+        `Bearer ${newAccessToken}`;
+
+      return API(originalRequest);
+    } catch (refreshError) {
+      processQueue(refreshError, null);
+
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+
+      return Promise.reject(refreshError);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+);
+
+export default API;
