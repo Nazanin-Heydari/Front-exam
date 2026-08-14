@@ -1,0 +1,419 @@
+صفحه‌ای داریم به اسم Products.
+
+کاربر می‌تواند:
+
+لیست محصولات را ببیند.
+محصول را حذف کند.
+محصول جدید اضافه کند.
+اگر Access Token منقضی شده باشد → 401
+اگر لاگین باشد ولی دسترسی حذف نداشته باشد → 403
+اگر Product پیدا نشود → 404
+اگر Backend مشکل داشته باشد → 500
+اگر اینترنت قطع باشد → Network Error
+اگر اطلاعات فرم اشتباه باشد → Validation Error
+در همه‌ی این حالت‌ها UI مناسب نشان داده شود.
+
+types/product.ts:
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  price: number;
+}
+
+types/api.ts:
+export interface ApiErrorResponse {
+  message: string;
+  code?: string;
+  errors?: Record<string, string[]>;
+}
+
+utils/interceptors/axios.ts:
+import axios from 'axios';
+
+const API = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+API.interceptors.response.use(
+  (response) => response,
+
+  async (error) => {
+    if (error.response?.status === 401) {
+      // در پروژه واقعی:
+      // refresh token logic
+      console.log('Unauthorized');
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default API;
+
+services/product-api.ts:
+import API from '@/utils/interceptors/axios';
+
+import {
+  Product,
+  CreateProductPayload,
+} from '@/types/product';
+
+export async function fetchProducts(): Promise<Product[]> {
+  const response = await API.get<Product[]>('/products');
+
+  return response.data;
+}
+
+export async function createProduct(
+  payload: CreateProductPayload
+): Promise<Product> {
+  const response = await API.post<Product>(
+    '/products',
+    payload
+  );
+
+  return response.data;
+}
+
+export async function deleteProduct(
+  id: number
+): Promise<void> {
+  await API.delete(`/products/${id}`);
+}
+
+hooks/useProducts.ts:
+import {
+  useQuery,
+} from '@tanstack/react-query';
+
+import { fetchProducts } from '@/services/product-api';
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+  });
+}
+
+hooks/useCreateProduct.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { createProduct } from '@/services/product-api';
+
+export function useCreateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createProduct,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['products'],
+      });
+    },
+  });
+}
+
+useDeleteProduct:
+import {
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { deleteProduct } from '@/services/product-api';
+
+export function useDeleteProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProduct,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['products'],
+      });
+    },
+  });
+}
+
+components/ErrorMessage.tsx:
+import { AxiosError } from 'axios';
+
+import { ApiErrorResponse } from '@/types/api';
+
+interface ErrorMessageProps {
+  error: unknown;
+}
+
+export function ErrorMessage({
+  error,
+}: ErrorMessageProps) {
+  if (!(error instanceof AxiosError)) {
+    return (
+      <div className="rounded-lg bg-red-50 p-4 text-red-700">
+        Something went wrong.
+      </div>
+    );
+  }
+
+  if (!error.response) {
+    return (
+      <div className="rounded-lg bg-red-50 p-4 text-red-700">
+        Network error. Please check your connection.
+      </div>
+    );
+  }
+
+  const status = error.response.status;
+
+  const data =
+    error.response.data as ApiErrorResponse;
+
+  switch (status) {
+    case 401:
+      return (
+        <div className="rounded-lg bg-yellow-50 p-4 text-yellow-700">
+          Your session has expired. Please login again.
+        </div>
+      );
+
+    case 403:
+      return (
+        <div className="rounded-lg bg-red-50 p-4 text-red-700">
+          You do not have permission to perform this action.
+        </div>
+      );
+
+    case 404:
+      return (
+        <div className="rounded-lg bg-orange-50 p-4 text-orange-700">
+          Product not found.
+        </div>
+      );
+
+    case 422:
+      return (
+        <div className="rounded-lg bg-orange-50 p-4 text-orange-700">
+          {data.message || 'Validation error.'}
+        </div>
+      );
+
+    case 500:
+      return (
+        <div className="rounded-lg bg-red-50 p-4 text-red-700">
+          Server error. Please try again later.
+        </div>
+      );
+
+    default:
+      return (
+        <div className="rounded-lg bg-red-50 p-4 text-red-700">
+          {data.message || 'Something went wrong.'}
+        </div>
+      );
+  }
+}
+
+ProductCard:
+import { Product } from '@/types/product';
+
+interface ProductCardProps {
+  product: Product;
+  onDelete: (id: number) => void;
+  isDeleting: boolean;
+}
+
+export function ProductCard({
+  product,
+  onDelete,
+  isDeleting,
+}: ProductCardProps) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border p-4">
+      <div>
+        <h3 className="font-semibold">
+          {product.name}
+        </h3>
+
+        <p className="text-sm text-gray-500">
+          ${product.price}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        disabled={isDeleting}
+        onClick={() => onDelete(product.id)}
+        className="rounded-lg bg-red-500 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {isDeleting ? 'Deleting...' : 'Delete'}
+      </button>
+    </div>
+  );
+}
+
+ProductsPage:
+import {
+  useState,
+} from 'react';
+
+import { ProductCard } from '@/components/ProductCard';
+import { ErrorMessage } from '@/components/ErrorMessage';
+
+import { useProducts } from '@/hooks/useProducts';
+import { useDeleteProduct } from '@/hooks/useDeleteProduct';
+import { useCreateProduct } from '@/hooks/useCreateProduct';
+
+export default function ProductsPage() {
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+
+  const {
+    data: products = [],
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useProducts();
+
+  const deleteMutation = useDeleteProduct();
+
+  const createMutation = useCreateProduct();
+
+  const handleDelete = (id: number) => {
+    deleteMutation.mutate(id);
+  };
+
+  const handleCreate = () => {
+    createMutation.mutate({
+      name,
+      price: Number(price),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        Loading products...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6">
+        <ErrorMessage error={error} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+
+      <h1 className="text-2xl font-bold">
+        Products
+      </h1>
+
+      {/* Create Product */}
+
+      <div className="space-y-3 rounded-xl border p-5">
+
+        <input
+          value={name}
+          onChange={(event) =>
+            setName(event.target.value)
+          }
+          placeholder="Product name"
+          className="w-full rounded-lg border px-4 py-2"
+        />
+
+        <input
+          type="number"
+          value={price}
+          onChange={(event) =>
+            setPrice(event.target.value)
+          }
+          placeholder="Price"
+          className="w-full rounded-lg border px-4 py-2"
+        />
+
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={createMutation.isPending}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        >
+          {createMutation.isPending
+            ? 'Creating...'
+            : 'Add Product'}
+        </button>
+
+        {createMutation.isError && (
+          <ErrorMessage
+            error={createMutation.error}
+          />
+        )}
+
+      </div>
+
+      {/* Background Refetch */}
+
+      {isFetching && !isLoading && (
+        <p className="text-sm text-gray-500">
+          Updating products...
+        </p>
+      )}
+
+      {/* Products */}
+
+      <div className="space-y-3">
+
+        {products.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onDelete={handleDelete}
+            isDeleting={
+              deleteMutation.isPending
+            }
+          />
+        ))}
+
+      </div>
+
+      {deleteMutation.isError && (
+        <ErrorMessage
+          error={deleteMutation.error}
+        />
+      )}
+
+    </div>
+  );
+}
