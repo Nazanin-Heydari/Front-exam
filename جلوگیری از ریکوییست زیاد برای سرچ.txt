@@ -1,0 +1,31 @@
+useDebounce مشکل تعداد Requestها را حل می‌کند، ولی تضمین نمی‌کند Requestهای قبلی که قبلاً ارسال شده‌اند نتوانند بعداً نتیجه‌ی اشتباه وارد UI کنند.
+راهکار اصولی‌تر:
+
+Abort / Cancellation
+
+مثلاً با AbortController:
+
+useEffect(() => {
+  const controller = new AbortController();
+
+  const timer = setTimeout(async () => {
+    const response = await fetch(
+      `/products?search=${search}`,
+      {
+        signal: controller.signal,
+      }
+    );
+
+    const data = await response.json();
+    setProducts(data);
+  }, 500);
+
+  return () => {
+    clearTimeout(timer);
+    controller.abort();
+  };
+}, [search]);
+
+Debounce: چند ریکوییست نزنیم
+Cleanup: Effectقبلی را تمیز کنیم
+AbortController: ریکوییست قبلی را که واقعا ارسال شده کنسل کنیم
