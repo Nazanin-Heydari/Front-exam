@@ -1,0 +1,274 @@
+src/
+├── components/
+│   ├── UserCard.tsx
+│   ├── SearchInput.tsx
+│   └── CreateUserForm.tsx
+│
+├── hooks/
+│   ├── useUsers.ts
+│   ├── useDeleteUser.ts
+│   └── useCreateUser.ts
+│
+├── pages/
+│   └── UsersPage.tsx
+│
+├── services/
+│   └── user.service.ts
+│
+└── types/
+    └── user.ts
+
+
+---------------------------------------------
+types/user.ts:
+export type UserRole = "admin" | "user";
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  role: UserRole;
+}
+----------
+services/user.service.ts:
+import API from "@/utils/api";
+import {
+  User,
+  CreateUserPayload,
+} from "@/types/user";
+
+export const fetchUsers = async (): Promise<User[]> => {
+  const response = await API.get<User[]>("/api/users");
+
+  return response.data;
+};
+
+export const deleteUser = async (id: number): Promise<void> => {
+  await API.delete(`/api/users/${id}`);
+};
+
+export const createUser = async (
+  payload: CreateUserPayload
+): Promise<User> => {
+  const response = await API.post<User>(
+    "/api/users",
+    payload
+  );
+
+  return response.data;
+};
+------
+hooks/useUsers.ts:
+import { useQuery } from "@tanstack/react-query";
+import { fetchUsers } from "@/services/user.service";
+
+export const USERS_QUERY_KEY = ["users"];
+
+export function useUsers() {
+  return useQuery({
+    queryKey: USERS_QUERY_KEY,
+    queryFn: fetchUsers,
+  });
+}
+-----
+hooks/useDeleteUser.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+import {
+  deleteUser,
+} from "@/services/user.service";
+
+import {
+  USERS_QUERY_KEY,
+} from "./useUsers";
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteUser,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: USERS_QUERY_KEY,
+      });
+    },
+  });
+}
+-----
+hooks/useCreateUser.ts:
+import {
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+import {
+  createUser,
+} from "@/services/user.service";
+
+import {
+  USERS_QUERY_KEY,
+} from "./useUsers";
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createUser,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: USERS_QUERY_KEY,
+      });
+    },
+  });
+}
+----
+components/SearchInput.tsx:
+interface SearchInputProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function SearchInput({
+  value,
+  onChange,
+}: SearchInputProps) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder="Search users..."
+      className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
+    />
+  );
+}
+------
+components/UserCard.tsx:
+import { User } from "@/types/user";
+
+interface UserCardProps {
+  user: User;
+  onDelete: (id: number) => void;
+  isDeleting: boolean;
+}
+
+export function UserCard({
+  user,
+  onDelete,
+  isDeleting,
+}: UserCardProps) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-gray-200 p-4">
+      <div>
+        <h3 className="text-lg font-semibold">
+          {user.name}
+        </h3>
+
+        <p className="text-sm text-gray-500">
+          {user.email}
+        </p>
+
+        <span className="text-xs text-gray-400">
+          {user.role}
+        </span>
+      </div>
+
+      <button
+        onClick={() => onDelete(user.id)}
+        disabled={isDeleting}
+        className="rounded-lg bg-red-500 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isDeleting ? "Deleting..." : "Delete"}
+      </button>
+    </div>
+  );
+}
+-----
+components/CreateUserForm.tsx:
+import { FormEvent, useState } from "react";
+import {
+  CreateUserPayload,
+  UserRole,
+} from "@/types/user";
+
+interface CreateUserFormProps {
+  onSubmit: (data: CreateUserPayload) => void;
+  isCreating: boolean;
+}
+
+export function CreateUserForm({
+  onSubmit,
+  isCreating,
+}: CreateUserFormProps) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<UserRole>("user");
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    onSubmit({
+      name,
+      email,
+      role,
+    });
+
+    setName("");
+    setEmail("");
+    setRole("user");
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-xl border p-4"
+    >
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="Name"
+        className="w-full rounded-lg border px-4 py-2"
+      />
+
+      <input
+        type="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        placeholder="Email"
+        className="w-full rounded-lg border px-4 py-2"
+      />
+
+      <select
+        value={role}
+        onChange={(event) =>
+          setRole(event.target.value as UserRole)
+        }
+        className="w-full rounded-lg border px-4 py-2"
+      >
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <button
+        type="submit"
+        disabled={isCreating}
+        className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+      >
+        {isCreating ? "Adding..." : "Add User"}
+      </button>
+    </form>
+  );
+}
+--------------
+
