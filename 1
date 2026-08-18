@@ -1,0 +1,264 @@
+import React, { useState, useRef } from 'react';
+
+export default function BookOrderForm() {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    bookTitle: '',
+    quantity: 1,
+    deliveryType: 'standard', // standard | express
+    notes: ''
+  });
+
+  const [errors, setErrors] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // ریفرنس‌ها برای مدیریت فوکوس
+  const confirmationRef = useRef(null);
+  const firstErrorRef = useRef(null);
+
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'لطفاً نام و نام خانوادگی خود را وارد کنید.';
+    }
+    if (!formData.bookTitle.trim()) {
+      newErrors.bookTitle = 'لطفاً عنوان کتاب را وارد کنید.';
+    }
+    if (!formData.quantity || formData.quantity < 1) {
+      newErrors.quantity = 'تعداد باید حداقل ۱ جلد باشد.';
+    }
+    return newErrors;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    // پاک کردن خطای فیلد در حال ویرایش
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const validationErrors = validate();
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setIsSubmitted(false);
+      // انتقال فوکوس به اولین فیلد دارای خطا در رندر بعدی
+      setTimeout(() => {
+        const firstInvalidElement = document.querySelector('[aria-invalid="true"]');
+        if (firstInvalidElement) {
+          firstInvalidElement.focus();
+        }
+      }, 0);
+      return;
+    }
+
+    setErrors({});
+    setIsSubmitted(true);
+
+    // انتقال فوکوس به پیام موفقیت برای Screen Readerها
+    setTimeout(() => {
+      if (confirmationRef.current) {
+        confirmationRef.current.focus();
+      }
+    }, 0);
+  };
+
+  return (
+    <main style={{ maxWidth: '540px', margin: '2rem auto', padding: '1.5rem', fontFamily: 'sans-serif', direction: 'rtl' }}>
+      <h1>ثبت سفارش آنلاین کتاب</h1>
+
+      {/* پیام تایید با قابلیت دریافت فوکوس و خوانده شدن توسط Screen Reader */}
+      {isSubmitted && (
+        <div
+          ref={confirmationRef}
+          tabIndex={-1}
+          role="status"
+          aria-live="polite"
+          style={{
+            padding: '1rem',
+            marginBottom: '1.5rem',
+            backgroundColor: '#d4edda',
+            color: '#155724',
+            borderRadius: '6px',
+            border: '1px solid #c3e6cb',
+            outline: 'none'
+          }}
+        >
+          <h2>سفارش شما با موفقیت ثبت شد!</h2>
+          <p>کتاب «{formData.bookTitle}» به تعداد {formData.quantity} برای شما ارسال خواهد شد.</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} noValidate>
+        {/* فیلد نام و نام خانوادگی */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label htmlFor="fullName" style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            نام و نام خانوادگی <span aria-hidden="true" style={{ color: '#d9534f' }}>*</span>
+          </label>
+          <input
+            id="fullName"
+            name="fullName"
+            type="text"
+            required
+            aria-required="true"
+            aria-invalid={errors.fullName ? 'true' : 'false'}
+            aria-describedby={errors.fullName ? 'fullName-error' : undefined}
+            value={formData.fullName}
+            onChange={handleChange}
+            style={{
+              width: '100%',
+              minHeight: '44px',
+              padding: '0.5rem',
+              fontSize: '1rem',
+              borderRadius: '4px',
+              border: errors.fullName ? '2px solid #d9534f' : '1px solid #ccc',
+              boxSizing: 'border-box'
+            }}
+          />
+          {errors.fullName && (
+            <span id="fullName-error" role="alert" style={{ color: '#d9534f', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem' }}>
+              {errors.fullName}
+            </span>
+          )}
+        </div>
+
+        {/* فیلد عنوان کتاب */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label htmlFor="bookTitle" style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            عنوان کتاب <span aria-hidden="true" style={{ color: '#d9534f' }}>*</span>
+          </label>
+          <input
+            id="bookTitle"
+            name="bookTitle"
+            type="text"
+            required
+            aria-required="true"
+            aria-invalid={errors.bookTitle ? 'true' : 'false'}
+            aria-describedby={errors.bookTitle ? 'bookTitle-error' : undefined}
+            value={formData.bookTitle}
+            onChange={handleChange}
+            style={{
+              width: '100%',
+              minHeight: '44px',
+              padding: '0.5rem',
+              fontSize: '1rem',
+              borderRadius: '4px',
+              border: errors.bookTitle ? '2px solid #d9534f' : '1px solid #ccc',
+              boxSizing: 'border-box'
+            }}
+          />
+          {errors.bookTitle && (
+            <span id="bookTitle-error" role="alert" style={{ color: '#d9534f', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem' }}>
+              {errors.bookTitle}
+            </span>
+          )}
+        </div>
+
+        {/* فیلد تعداد */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label htmlFor="quantity" style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            تعداد جلد
+          </label>
+          <input
+            id="quantity"
+            name="quantity"
+            type="number"
+            min="1"
+            aria-invalid={errors.quantity ? 'true' : 'false'}
+            aria-describedby={errors.quantity ? 'quantity-error' : undefined}
+            value={formData.quantity}
+            onChange={handleChange}
+            style={{
+              width: '100%',
+              minHeight: '44px',
+              padding: '0.5rem',
+              fontSize: '1rem',
+              borderRadius: '4px',
+              border: errors.quantity ? '2px solid #d9534f' : '1px solid #ccc',
+              boxSizing: 'border-box'
+            }}
+          />
+          {errors.quantity && (
+            <span id="quantity-error" role="alert" style={{ color: '#d9534f', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem' }}>
+              {errors.quantity}
+            </span>
+          )}
+        </div>
+
+        {/* فیلدست نحوه ارسال (گروه‌بندی رادیوها برای دسترس‌پذیری) */}
+        <fieldset style={{ marginBottom: '1.25rem', border: '1px solid #ccc', borderRadius: '4px', padding: '0.75rem' }}>
+          <legend style={{ fontWeight: 'bold', padding: '0 0.5rem' }}>نوع ارسال</legend>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: '44px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="deliveryType"
+                value="standard"
+                checked={formData.deliveryType === 'standard'}
+                onChange={handleChange}
+                style={{ width: '20px', height: '20px' }}
+              />
+              ارسال معمولی (پست سفارشی)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: '44px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="deliveryType"
+                value="express"
+                checked={formData.deliveryType === 'express'}
+                onChange={handleChange}
+                style={{ width: '20px', height: '20px' }}
+              />
+              ارسال پیشتاز (فوری)
+            </label>
+          </div>
+        </fieldset>
+
+        {/* فیلد توضیحات */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label htmlFor="notes" style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            توضیحات یا آدرس سفارش
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows="3"
+            value={formData.notes}
+            onChange={handleChange}
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: '0.5rem',
+              fontSize: '1rem',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+
+        {/* دکمه ارسال */}
+        <button
+          type="submit"
+          style={{
+            width: '100%',
+            minHeight: '48px',
+            backgroundColor: '#0056b3',
+            color: '#fff',
+            fontSize: '1.1rem',
+            fontWeight: 'bold',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          ثبت نهایی سفارش
+        </button>
+      </form>
+    </main>
+  );
+}
