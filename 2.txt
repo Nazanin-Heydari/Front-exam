@@ -1,0 +1,466 @@
+import OrderForm from "./components/OrderForm";
+
+function App() {
+  return (
+    <main className="page">
+      <OrderForm />
+    </main>
+  );
+}
+
+export default App;
+
+import { FormEvent, useRef, useState } from "react";
+
+interface OrderFormData {
+  name: string;
+  email: string;
+  book: string;
+  quantity: number;
+  address: string;
+}
+
+const books = [
+  {
+    id: "road-to-react",
+    title: "The Road to React",
+  },
+  {
+    id: "clean-code",
+    title: "Clean Code",
+  },
+  {
+    id: "javascript-guide",
+    title: "JavaScript Guide",
+  },
+];
+
+export default function OrderForm() {
+  const [formData, setFormData] = useState<OrderFormData>({
+    name: "",
+    email: "",
+    book: "",
+    quantity: 1,
+    address: "",
+  });
+
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof OrderFormData, string>>
+  >({});
+
+  const [submitted, setSubmitted] = useState(false);
+
+  const successMessageRef = useRef<HTMLDivElement>(null);
+
+  const handleChange = (
+    event: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
+  ) => {
+    const { name, value } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]:
+        name === "quantity"
+          ? Number(value)
+          : value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Partial<
+      Record<keyof OrderFormData, string>
+    > = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = "Please enter your name.";
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = "Please enter your email.";
+    } else if (!formData.email.includes("@")) {
+      newErrors.email =
+        "Please enter a valid email address.";
+    }
+
+    if (!formData.book) {
+      newErrors.book = "Please select a book.";
+    }
+
+    if (formData.quantity < 1) {
+      newErrors.quantity =
+        "Quantity must be at least 1.";
+    }
+
+    if (!formData.address.trim()) {
+      newErrors.address =
+        "Please enter your delivery address.";
+    }
+
+    return newErrors;
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setSubmitted(false);
+
+    const validationErrors = validateForm();
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+
+      return;
+    }
+
+    setErrors({});
+    setSubmitted(true);
+
+    // در پروژه واقعی اینجا API call انجام می‌شود.
+    console.log("Order submitted:", formData);
+
+    // انتقال Focus به پیام موفقیت
+    setTimeout(() => {
+      successMessageRef.current?.focus();
+    }, 0);
+  };
+
+  return (
+    <section
+      aria-labelledby="order-title"
+      className="order-container"
+    >
+      <header>
+        <h1 id="order-title">
+          Book Order Form
+        </h1>
+
+        <p>
+          Fill out the form below to order your
+          favorite book.
+        </p>
+      </header>
+
+      {submitted && (
+        <div
+          ref={successMessageRef}
+          id="order-success"
+          role="status"
+          tabIndex={-1}
+          aria-live="polite"
+          className="success-message"
+        >
+          Your order was submitted successfully.
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        aria-describedby="form-description"
+      >
+        <p id="form-description">
+          All fields marked as required must be
+          completed.
+        </p>
+
+        {/* Name */}
+
+        <div className="form-field">
+          <label htmlFor="name">
+            Full name
+            <span aria-hidden="true"> *</span>
+          </label>
+
+          <input
+            id="name"
+            name="name"
+            type="text"
+            value={formData.name}
+            onChange={handleChange}
+            required
+            autoComplete="name"
+            aria-required="true"
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={
+              errors.name ? "name-error" : undefined
+            }
+          />
+
+          {errors.name && (
+            <p
+              id="name-error"
+              className="error-message"
+              role="alert"
+            >
+              {errors.name}
+            </p>
+          )}
+        </div>
+
+        {/* Email */}
+
+        <div className="form-field">
+          <label htmlFor="email">
+            Email address
+            <span aria-hidden="true"> *</span>
+          </label>
+
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            autoComplete="email"
+            aria-required="true"
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={
+              errors.email
+                ? "email-error"
+                : undefined
+            }
+          />
+
+          {errors.email && (
+            <p
+              id="email-error"
+              className="error-message"
+              role="alert"
+            >
+              {errors.email}
+            </p>
+          )}
+        </div>
+
+        {/* Book */}
+
+        <div className="form-field">
+          <label htmlFor="book">
+            Select a book
+            <span aria-hidden="true"> *</span>
+          </label>
+
+          <select
+            id="book"
+            name="book"
+            value={formData.book}
+            onChange={handleChange}
+            required
+            aria-required="true"
+            aria-invalid={Boolean(errors.book)}
+            aria-describedby={
+              errors.book
+                ? "book-error"
+                : undefined
+            }
+          >
+            <option value="">
+              Select a book
+            </option>
+
+            {books.map((book) => (
+              <option
+                key={book.id}
+                value={book.id}
+              >
+                {book.title}
+              </option>
+            ))}
+          </select>
+
+          {errors.book && (
+            <p
+              id="book-error"
+              className="error-message"
+              role="alert"
+            >
+              {errors.book}
+            </p>
+          )}
+        </div>
+
+        {/* Quantity */}
+
+        <div className="form-field">
+          <label htmlFor="quantity">
+            Quantity
+          </label>
+
+          <input
+            id="quantity"
+            name="quantity"
+            type="number"
+            min="1"
+            value={formData.quantity}
+            onChange={handleChange}
+            aria-invalid={Boolean(errors.quantity)}
+            aria-describedby={
+              errors.quantity
+                ? "quantity-error"
+                : undefined
+            }
+          />
+
+          {errors.quantity && (
+            <p
+              id="quantity-error"
+              className="error-message"
+              role="alert"
+            >
+              {errors.quantity}
+            </p>
+          )}
+        </div>
+
+        {/* Address */}
+
+        <div className="form-field">
+          <label htmlFor="address">
+            Delivery address
+            <span aria-hidden="true"> *</span>
+          </label>
+
+          <textarea
+            id="address"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            required
+            autoComplete="street-address"
+            aria-required="true"
+            aria-invalid={Boolean(errors.address)}
+            aria-describedby={
+              errors.address
+                ? "address-error"
+                : undefined
+            }
+          />
+
+          {errors.address && (
+            <p
+              id="address-error"
+              className="error-message"
+              role="alert"
+            >
+              {errors.address}
+            </p>
+          )}
+        </div>
+
+        <button type="submit">
+          Place order
+        </button>
+      </form>
+    </section>
+  );
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  color: #222;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.order-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+}
+
+.form-field {
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #777;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+button {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+.error-message {
+  margin-top: 6px;
+  color: #b91c1c;
+}
+
+.success-message {
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid #15803d;
+  border-radius: 6px;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 12px;
+  }
+
+  .order-container {
+    padding: 16px;
+  }
+
+  button {
+    width: 100%;
+  }
+}
